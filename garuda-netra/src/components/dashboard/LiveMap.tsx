@@ -299,11 +299,10 @@ const LiveMap: React.FC<LiveMapProps> = ({
         className="w-full h-full"
         style={{ minHeight: '100%', background: '#0f172a' }}
       >
-        {/* CartoDB Dark Matter Tiles */}
+        {/* OpenStreetMap Tactical Tiles - 100% Free & No API Key Required */}
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-          attribution='&copy; <a href="https://carto.com/">CARTO</a> &bull; Garuda Netra'
-          subdomains="abcd"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &bull; Garuda Netra'
           maxZoom={19}
         />
 
