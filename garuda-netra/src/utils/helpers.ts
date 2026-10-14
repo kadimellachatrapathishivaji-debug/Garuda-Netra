@@ -2,8 +2,8 @@ export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-export function formatTimestamp(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date;
+export function formatTimestamp(date: Date | string | number): string {
+  const d = typeof date === 'string' || typeof date === 'number' ? new Date(date) : date;
   return d.toLocaleString('en-IN', {
     day: '2-digit',
     month: 'short',

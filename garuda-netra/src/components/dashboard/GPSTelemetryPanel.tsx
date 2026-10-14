@@ -276,7 +276,7 @@ const GPSTelemetryPanel: React.FC<GPSTelemetryPanelProps> = ({ position, vehicle
               <span>Last Packet</span>
             </div>
             <div className="font-mono text-[11px] text-slate-300">
-              {position?.timestamp ? formatTimestamp(position.timestamp) : '2026-10-14 05:42:19 IST'}
+              {position?.timestamp ? formatTimestamp(new Date(position.timestamp)) : '2026-10-14 05:42:19 IST'}
             </div>
           </div>
         </div>

@@ -41,7 +41,7 @@ const OwnerLogin: React.FC<OwnerLoginProps> = ({ onLogin, onBack }) => {
 
   // Timer countdown effect for OTP resend
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
     if (step === 'otp' && timer > 0) {
       interval = setInterval(() => {
         setTimer((prev) => prev - 1);

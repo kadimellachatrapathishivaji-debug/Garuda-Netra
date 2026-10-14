@@ -379,7 +379,7 @@ const LiveMap: React.FC<LiveMapProps> = ({
                   {formatCoordinate(currentPosition.lng, 'lng')}
                 </div>
                 <div className="text-[10px] text-slate-400 border-t border-slate-800 pt-1">
-                  Last ping: {formatTimestamp(currentPosition.timestamp)}
+                  Last ping: {formatTimestamp(new Date(currentPosition.timestamp))}
                 </div>
               </div>
             </Popup>
