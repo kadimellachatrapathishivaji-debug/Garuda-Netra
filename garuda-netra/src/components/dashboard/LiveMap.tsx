@@ -12,6 +12,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import {
   GPSCoordinate,
+  RoutePoint,
   VehicleRecord,
   FASTagScan,
   ANPRSighting,
@@ -47,6 +48,7 @@ interface PoliceUnitItem {
 export interface LiveMapProps {
   currentPosition: GPSCoordinate | null;
   positionHistory: GPSCoordinate[];
+  activeRoute?: RoutePoint[];
   vehicle: VehicleRecord;
   fastagScans: FASTagScan[];
   anprSightings: ANPRSighting[];
@@ -144,6 +146,7 @@ const createANPRIcon = () =>
 const LiveMap: React.FC<LiveMapProps> = ({
   currentPosition,
   positionHistory,
+  activeRoute = [],
   vehicle,
   fastagScans,
   anprSightings,
@@ -344,8 +347,14 @@ const LiveMap: React.FC<LiveMapProps> = ({
           <span
             className={`w-3 h-0.5 ${isHardware ? 'bg-emerald-400' : 'bg-amber-500'}`}
           />
-          <span>Route</span>
+          <span>Live Track</span>
         </div>
+        {activeRoute.length > 1 && (
+          <div className="flex items-center gap-1.5 hidden sm:flex">
+            <span className="w-3.5 h-0.5 bg-sky-400 border-dashed" style={{ borderTop: '1px dashed #38bdf8' }} />
+            <span className="text-sky-300">Highway</span>
+          </div>
+        )}
         <div className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-sm bg-blue-500 shadow-[0_0_6px_#3b82f6]" />
           <span>FASTag</span>
@@ -380,7 +389,21 @@ const LiveMap: React.FC<LiveMapProps> = ({
         {/* Map View Fly/Center Updater */}
         <MapUpdater position={activePosition} isLocked={isCameraLocked} />
 
-        {/* Route Polyline */}
+        {/* Planned Highway Route Corridor (Road Network Path) */}
+        {showRoute && activeRoute.length > 1 && (
+          <Polyline
+            positions={activeRoute.map((p) => [p.lat, p.lng])}
+            pathOptions={{
+              color: '#38bdf8',
+              weight: 3,
+              opacity: 0.35,
+              dashArray: '5, 8',
+              lineCap: 'round',
+            }}
+          />
+        )}
+
+        {/* Road-Snapped Live Traveled Polyline */}
         {showRoute && polylinePositions.length > 1 && (
           <>
             {/* Outer Glow Line */}
@@ -389,7 +412,7 @@ const LiveMap: React.FC<LiveMapProps> = ({
               pathOptions={{
                 color: isHardware ? '#10b981' : '#f59e0b',
                 weight: 8,
-                opacity: 0.25,
+                opacity: 0.3,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}
@@ -400,7 +423,7 @@ const LiveMap: React.FC<LiveMapProps> = ({
               pathOptions={{
                 color: isHardware ? '#10b981' : '#f59e0b',
                 weight: 4,
-                opacity: 0.9,
+                opacity: 0.95,
                 lineCap: 'round',
                 lineJoin: 'round',
               }}

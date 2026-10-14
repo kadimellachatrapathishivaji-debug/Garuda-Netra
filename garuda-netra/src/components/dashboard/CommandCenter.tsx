@@ -53,6 +53,7 @@ const CommandCenter: React.FC<CommandCenterProps> = ({
   const {
     currentPosition,
     positionHistory,
+    activeRoute,
     isHardwareGPS,
     hardwareAccuracy,
     isDriveBoostActive,
@@ -453,6 +454,7 @@ const CommandCenter: React.FC<CommandCenterProps> = ({
           <LiveMap
             currentPosition={currentPosition}
             positionHistory={positionHistory}
+            activeRoute={activeRoute}
             vehicle={vehicle}
             fastagScans={vehicleFASTag}
             anprSightings={vehicleANPR}

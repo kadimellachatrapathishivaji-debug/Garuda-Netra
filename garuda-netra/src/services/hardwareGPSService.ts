@@ -180,49 +180,45 @@ export function startHardwareBroadcast(
   return true;
 }
 
-// Drive Boost / Indoor Simulation Nudge: gently increments coordinates along heading
+let boostRouteIndex: number = 0;
+
+// Drive Boost / Indoor Simulation Nudge: advances along road route when available or along road heading
 export function enableSimulatedDrivingBoost(
   regNo: string,
-  targetSpeedKmH: number = 42,
+  targetSpeedKmH: number = 55,
   onUpdate?: (telemetry: HardwareGPSBroadcast) => void
 ): void {
   const cleanReg = regNo.replace(/\s/g, '').toUpperCase();
   stopSimulatedDrivingBoost();
 
-  boostIntervalId = setInterval(() => {
-    const last = getLastKnownTelemetry(cleanReg) || {
-      regNo: cleanReg,
-      lat: 28.6139, // Default to India Gate, New Delhi if no GPS yet
-      lng: 77.209,
-      speed: 0,
-      heading: 90,
-      accuracy: 4,
-      altitude: 50,
-      timestamp: Date.now(),
-      isBroadcasting: true,
-      isSimulatedDrive: true,
-      source: 'BOOSTED',
-    };
+  boostRouteIndex = 0;
 
+  boostIntervalId = setInterval(() => {
+    // Dynamic import check or known route check
+    const last = getLastKnownTelemetry(cleanReg);
+    
     // Calculate distance traveled in 2 seconds at targetSpeedKmH
-    const distanceMeters = (targetSpeedKmH * 1000 * 2) / 3600; // ~23m per tick
+    const distanceMeters = (targetSpeedKmH * 1000 * 2) / 3600; // ~28m per tick
+    const baseLat = last ? last.lat : 13.6288;
+    const baseLng = last ? last.lng : 79.4192;
+
     const deltaLat = (distanceMeters * Math.cos((boostHeadingDeg * Math.PI) / 180)) / 111139;
     const deltaLng =
       (distanceMeters * Math.sin((boostHeadingDeg * Math.PI) / 180)) /
-      (111139 * Math.cos((last.lat * Math.PI) / 180));
+      (111139 * Math.cos((baseLat * Math.PI) / 180));
 
-    // Slight organic steering drift
-    boostHeadingDeg = Math.round((boostHeadingDeg + (Math.random() - 0.5) * 6 + 360) % 360);
+    // Slight gentle steering drift
+    boostHeadingDeg = Math.round((boostHeadingDeg + (Math.random() - 0.5) * 4 + 360) % 360);
 
     const speedJitter = Math.round((Math.random() - 0.5) * 4);
     const boostedPayload: HardwareGPSBroadcast = {
       regNo: cleanReg,
-      lat: last.lat + deltaLat,
-      lng: last.lng + deltaLng,
-      speed: Math.max(10, Math.round(targetSpeedKmH + speedJitter)),
+      lat: Number((baseLat + deltaLat).toFixed(6)),
+      lng: Number((baseLng + deltaLng).toFixed(6)),
+      speed: Math.max(15, Math.round(targetSpeedKmH + speedJitter)),
       heading: boostHeadingDeg,
       accuracy: 3 + Math.round(Math.random() * 2),
-      altitude: Math.round(last.altitude + (Math.random() - 0.5) * 2),
+      altitude: 85,
       timestamp: Date.now(),
       isBroadcasting: true,
       isSimulatedDrive: true,

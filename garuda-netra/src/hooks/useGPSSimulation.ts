@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { GPSCoordinate, RoutePoint, HardwareGPSBroadcast } from '../types';
-import { vehicleRoutes } from '../data/mockRoutes';
+import { vehicleRoutes, tirupatiChennaiRoute } from '../data/mockRoutes';
 import {
   subscribeToTelemetry,
   startHardwareBroadcast,
@@ -9,7 +9,27 @@ import {
   enableSimulatedDrivingBoost,
   stopSimulatedDrivingBoost,
   getLastKnownTelemetry,
+  calculateCompassBearing,
 } from '../services/hardwareGPSService';
+import { generateCityRoadCircuit, fetchOSRMRoute } from '../services/roadRoutingService';
+import { deriveRTOFromRegNumber } from '../services/vahanService';
+
+// Fallback city center coordinates for major Indian state prefixes
+const STATE_ROAD_CENTERS: Record<string, { lat: number; lng: number }> = {
+  AP: { lat: 13.6288, lng: 79.4192 }, // Tirupati / Amaravati
+  TS: { lat: 17.3850, lng: 78.4867 }, // Hyderabad
+  KA: { lat: 12.9716, lng: 77.5946 }, // Bengaluru
+  DL: { lat: 28.6139, lng: 77.2090 }, // Delhi
+  MH: { lat: 19.0760, lng: 72.8777 }, // Mumbai
+  TN: { lat: 13.0827, lng: 80.2707 }, // Chennai
+  UP: { lat: 26.8467, lng: 80.9462 }, // Lucknow
+  HR: { lat: 28.4595, lng: 77.0266 }, // Gurugram
+  GJ: { lat: 23.0225, lng: 72.5714 }, // Ahmedabad
+  RJ: { lat: 26.9124, lng: 75.7873 }, // Jaipur
+  KL: { lat: 9.9312, lng: 76.2673 },  // Kochi
+  WB: { lat: 22.5726, lng: 88.3639 }, // Kolkata
+  PB: { lat: 30.7046, lng: 76.7179 }, // Mohali
+};
 
 interface UseGPSSimulationOptions {
   registrationNumber: string;
@@ -20,6 +40,7 @@ interface UseGPSSimulationOptions {
 export interface UseGPSSimulationResult {
   currentPosition: GPSCoordinate | null;
   positionHistory: GPSCoordinate[];
+  activeRoute: RoutePoint[];
   isSimulating: boolean;
   routeCompleted: boolean;
   isHardwareGPS: boolean;
@@ -34,6 +55,19 @@ export function useGPSSimulation({
   enabled,
   intervalMs = 2000,
 }: UseGPSSimulationOptions): UseGPSSimulationResult {
+  const cleanRegNo = registrationNumber.replace(/\s/g, '').toUpperCase();
+  const stateCode = cleanRegNo.slice(0, 2);
+
+  // Determine initial road route
+  const getInitialRoute = (): RoutePoint[] => {
+    if (vehicleRoutes[cleanRegNo]) {
+      return vehicleRoutes[cleanRegNo];
+    }
+    const center = STATE_ROAD_CENTERS[stateCode] || STATE_ROAD_CENTERS['DL'];
+    return generateCityRoadCircuit(center.lat, center.lng, 6, 50);
+  };
+
+  const [activeRoute, setActiveRoute] = useState<RoutePoint[]>(getInitialRoute());
   const [currentPosition, setCurrentPosition] = useState<GPSCoordinate | null>(null);
   const [positionHistory, setPositionHistory] = useState<GPSCoordinate[]>([]);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -42,11 +76,25 @@ export function useGPSSimulation({
   const [hardwareAccuracy, setHardwareAccuracy] = useState<number | undefined>(undefined);
   const [isDriveBoostActive, setIsDriveBoostActive] = useState(false);
 
-  const cleanRegNo = registrationNumber.replace(/\s/g, '').toUpperCase();
-  const route = vehicleRoutes[cleanRegNo] || [];
-
   const progressRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Sync route if registration number changes
+  useEffect(() => {
+    const defaultRoute = getInitialRoute();
+    setActiveRoute(defaultRoute);
+
+    // If custom route with > 1 point, attempt OSRM highway enhancement asynchronously
+    if (!vehicleRoutes[cleanRegNo] && defaultRoute.length >= 2) {
+      const first = defaultRoute[0];
+      const mid = defaultRoute[Math.floor(defaultRoute.length / 2)];
+      fetchOSRMRoute(first.lat, first.lng, mid.lat, mid.lng).then((osrmPoints) => {
+        if (osrmPoints && osrmPoints.length > 10) {
+          setActiveRoute(osrmPoints);
+        }
+      });
+    }
+  }, [cleanRegNo, stateCode]);
 
   // 1. Subscribe to live hardware GPS broadcasts (cross-tab / cross-device)
   useEffect(() => {
@@ -74,12 +122,11 @@ export function useGPSSimulation({
 
         setCurrentPosition(newCoord);
         setPositionHistory((prev) => {
-          // Check if distance/time is different to avoid identical duplicate points
           const last = prev[prev.length - 1];
           if (last && Math.abs(last.lat - newCoord.lat) < 0.00001 && Math.abs(last.lng - newCoord.lng) < 0.00001) {
             return prev;
           }
-          return [...prev.slice(-300), newCoord];
+          return [...prev.slice(-400), newCoord];
         });
       }
     });
@@ -89,28 +136,28 @@ export function useGPSSimulation({
     };
   }, [cleanRegNo, enabled]);
 
-  // Interpolation for mock routes when not using hardware GPS
-  const interpolate = useCallback(
+  // 2. Strict road interpolation: follows actual road waypoints without cutting corners or jittering
+  const interpolateRoadPosition = useCallback(
     (progress: number): GPSCoordinate | null => {
-      if (route.length === 0) {
-        // Fallback realistic center for any custom vehicle when not broadcasting
+      if (activeRoute.length === 0) {
+        const center = STATE_ROAD_CENTERS[stateCode] || { lat: 13.6288, lng: 79.4192 };
         return {
-          lat: 28.6139,
-          lng: 77.209,
+          lat: center.lat,
+          lng: center.lng,
           timestamp: Date.now(),
           speed: 0,
           heading: 0,
           ignition: false,
           batteryTamper: false,
           altitude: 48,
-          accuracy: 5,
+          accuracy: 4,
           source: 'SIMULATED',
           provider: 'AIS-140 Standby',
         };
       }
 
-      if (route.length === 1) {
-        const p = route[0];
+      if (activeRoute.length === 1) {
+        const p = activeRoute[0];
         return {
           lat: p.lat,
           lng: p.lng,
@@ -119,47 +166,46 @@ export function useGPSSimulation({
           heading: p.heading,
           ignition: p.speed > 0,
           batteryTamper: cleanRegNo === 'KA01MB1029',
-          altitude: 50 + Math.random() * 200,
+          altitude: 120,
           accuracy: 4,
           source: 'SIMULATED',
         };
       }
 
-      const totalSegments = route.length - 1;
-      const scaledProgress = progress * totalSegments;
-      const segmentIndex = Math.min(Math.floor(scaledProgress), totalSegments - 1);
+      const totalSegments = activeRoute.length - 1;
+      const scaledProgress = Math.max(0, Math.min(progress, 0.999999)) * totalSegments;
+      const segmentIndex = Math.floor(scaledProgress);
       const segmentProgress = scaledProgress - segmentIndex;
 
-      const from = route[segmentIndex];
-      const to = route[Math.min(segmentIndex + 1, route.length - 1)];
+      const from = activeRoute[segmentIndex];
+      const to = activeRoute[Math.min(segmentIndex + 1, activeRoute.length - 1)];
 
+      // Linear interpolation strictly along the road segment
       const lat = from.lat + (to.lat - from.lat) * segmentProgress;
       const lng = from.lng + (to.lng - from.lng) * segmentProgress;
-      const speed = from.speed + (to.speed - from.speed) * segmentProgress;
-      const heading = from.heading + (to.heading - from.heading) * segmentProgress;
-
-      const jitterLat = (Math.random() - 0.5) * 0.0003;
-      const jitterLng = (Math.random() - 0.5) * 0.0003;
-      const jitterSpeed = (Math.random() - 0.5) * 4;
+      const speed = Math.round(from.speed + (to.speed - from.speed) * segmentProgress);
+      
+      // Exact compass bearing along the road tangent
+      const heading = calculateCompassBearing(from.lat, from.lng, to.lat, to.lng);
 
       return {
-        lat: lat + jitterLat,
-        lng: lng + jitterLng,
+        lat: Number(lat.toFixed(6)),
+        lng: Number(lng.toFixed(6)),
         timestamp: Date.now(),
-        speed: Math.max(0, Math.round(speed + jitterSpeed)),
-        heading: Math.round((heading + 360) % 360),
+        speed: Math.max(0, speed),
+        heading: (heading + 360) % 360,
         ignition: speed > 0,
         batteryTamper: cleanRegNo === 'KA01MB1029',
-        altitude: Math.round(50 + Math.random() * 200),
-        accuracy: 4,
+        altitude: 80,
+        accuracy: 3,
         source: 'SIMULATED',
-        provider: 'AIS-140 Hardware eSIM',
+        provider: 'AIS-140 Road Telemetry',
       };
     },
-    [route, cleanRegNo]
+    [activeRoute, cleanRegNo, stateCode]
   );
 
-  // 2. Mock route simulation loop (only active if no hardware GPS is currently broadcasting)
+  // 3. Road-snapped simulation loop (active when not streaming real hardware GPS)
   useEffect(() => {
     // Check if hardware GPS is active first
     const activeTelemetry = getLastKnownTelemetry(cleanRegNo);
@@ -170,7 +216,7 @@ export function useGPSSimulation({
       return;
     }
 
-    if (!enabled || route.length === 0) {
+    if (!enabled || activeRoute.length === 0) {
       setIsSimulating(false);
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -183,16 +229,17 @@ export function useGPSSimulation({
     setRouteCompleted(false);
     progressRef.current = 0;
 
-    const initialPos = interpolate(0);
+    const initialPos = interpolateRoadPosition(0);
     if (initialPos) {
       setCurrentPosition(initialPos);
       setPositionHistory([initialPos]);
     }
 
-    const step = 1 / (route.length * 15);
+    // Advance smoothly along road geometry
+    // Step size ensures vehicle stays on roads and glides realistically
+    const step = 1 / Math.max(80, activeRoute.length * 8);
 
     intervalRef.current = setInterval(() => {
-      // Don't overwrite if live hardware GPS broadcast took over
       if (isHardwareBroadcasting()) {
         return;
       }
@@ -200,14 +247,14 @@ export function useGPSSimulation({
       progressRef.current += step;
 
       if (progressRef.current >= 1) {
-        progressRef.current = 0;
+        progressRef.current = 0; // Loop or complete
         setRouteCompleted(true);
       }
 
-      const pos = interpolate(progressRef.current);
+      const pos = interpolateRoadPosition(progressRef.current);
       if (pos) {
         setCurrentPosition(pos);
-        setPositionHistory((prev) => [...prev.slice(-250), pos]);
+        setPositionHistory((prev) => [...prev.slice(-350), pos]);
       }
     }, intervalMs);
 
@@ -217,7 +264,7 @@ export function useGPSSimulation({
         intervalRef.current = null;
       }
     };
-  }, [enabled, cleanRegNo, intervalMs, route.length, interpolate]);
+  }, [enabled, cleanRegNo, intervalMs, activeRoute, interpolateRoadPosition]);
 
   // One-click toggle device hardware GPS directly from tracking view
   const toggleDeviceGPS = useCallback((): boolean => {
@@ -257,6 +304,7 @@ export function useGPSSimulation({
   return {
     currentPosition,
     positionHistory,
+    activeRoute,
     isSimulating,
     routeCompleted,
     isHardwareGPS,
