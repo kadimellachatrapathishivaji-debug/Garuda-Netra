@@ -7,6 +7,9 @@ import {
   Car,
   Activity,
   History,
+  Radio,
+  RadioTower,
+  Sparkles,
 } from 'lucide-react';
 import { VehicleRecord } from '../../types';
 import { useAuth } from '../../context/AuthContext';
@@ -21,6 +24,7 @@ import LiveMap from './LiveMap';
 import GPSTelemetryPanel from './GPSTelemetryPanel';
 import FallbackTrackingTimeline from './FallbackTrackingTimeline';
 import ActionControls from './ActionControls';
+import GPSTransmitterDrawer from '../transmitter/GPSTransmitterDrawer';
 
 export interface CommandCenterProps {
   vehicle: VehicleRecord;
@@ -42,10 +46,19 @@ const CommandCenter: React.FC<CommandCenterProps> = ({
 
   // Subtab for left sidebar (telemetry vs specs vs audit)
   const [activeLeftTab, setActiveLeftTab] = useState<'telemetry' | 'details' | 'audit'>('telemetry');
+  const [isTransmitterDrawerOpen, setIsTransmitterDrawerOpen] = useState(false);
 
-  // GPS Simulation Hook
+  // GPS Simulation & Hardware Hook
   const isAis140Active = vehicle.ais140Status === 'ACTIVE';
-  const { currentPosition, positionHistory } = useGPSSimulation({
+  const {
+    currentPosition,
+    positionHistory,
+    isHardwareGPS,
+    hardwareAccuracy,
+    isDriveBoostActive,
+    toggleDeviceGPS,
+    toggleDriveBoost,
+  } = useGPSSimulation({
     registrationNumber: vehicle.registrationNumber,
     enabled: isAis140Active,
   });
@@ -167,15 +180,39 @@ const CommandCenter: React.FC<CommandCenterProps> = ({
           </div>
         </div>
 
-        {/* Right: Tracker Info & Logout / Stop Controls */}
+        {/* Right: Hardware GPS Connection & Controls */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Tracker operator badge */}
-          <div className="hidden xl:flex flex-col text-right">
-            <span className="text-[10px] text-slate-400">Authorized Tracker</span>
-            <span className="text-[11px] font-medium text-slate-200 truncate max-w-[200px]" title={trackerInfo}>
-              {trackerInfo}
+          
+          {/* One-Click Connect This Device's GPS */}
+          <button
+            onClick={() => toggleDeviceGPS()}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 border ${
+              isHardwareGPS
+                ? 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border-emerald-500/50 shadow-sm'
+                : 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-amber-500/40 shadow-sm'
+            }`}
+            title={
+              isHardwareGPS
+                ? 'Disconnect this device from streaming GPS to this vehicle'
+                : `Connect this device's real GPS sensor to vehicle ${vehicle.registrationNumber}`
+            }
+          >
+            <RadioTower className={`w-3.5 h-3.5 ${isHardwareGPS ? 'text-emerald-400 animate-pulse' : 'text-amber-400'}`} />
+            <span className="hidden sm:inline">
+              {isHardwareGPS ? 'Device GPS Linked' : `Connect Device GPS`}
             </span>
-          </div>
+            <span className="sm:hidden">{isHardwareGPS ? 'Linked' : 'Connect GPS'}</span>
+          </button>
+
+          {/* Quick open Transmitter drawer */}
+          <button
+            onClick={() => setIsTransmitterDrawerOpen(true)}
+            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition-all active:scale-95"
+            title="Open Live GPS Transmitter Console"
+          >
+            <Radio className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden xl:inline">Transmitter</span>
+          </button>
 
           {/* Stop Tracking Button */}
           <button
@@ -184,7 +221,7 @@ const CommandCenter: React.FC<CommandCenterProps> = ({
             title="Conclude current vehicle tracking mission"
           >
             <Square className="w-3.5 h-3.5 fill-current" />
-            <span className="hidden sm:inline">Stop Tracking</span>
+            <span className="hidden sm:inline">Stop</span>
           </button>
 
           {/* Logout Button */}
@@ -199,8 +236,50 @@ const CommandCenter: React.FC<CommandCenterProps> = ({
         </div>
       </header>
 
+      {/* Prominent High-Visibility Live Hardware GPS Signal Banner */}
+      {isHardwareGPS && (
+        <div className="bg-emerald-950/90 border-b border-emerald-600/80 px-4 py-2 flex items-center justify-between text-xs text-emerald-100 z-10 animate-in fade-in">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+            </span>
+            <span className="font-bold uppercase tracking-wider text-emerald-300">
+              LIVE HARDWARE GPS SIGNAL (AIS-140 ACTIVE)
+            </span>
+            <span className="bg-emerald-500/20 text-emerald-300 text-[10px] font-mono px-2 py-0.5 rounded border border-emerald-500/40">
+              ±{hardwareAccuracy ? Math.round(hardwareAccuracy) : 4}m ACCURACY
+            </span>
+            {isDriveBoostActive && (
+              <span className="bg-amber-500/20 text-amber-300 text-[10px] font-mono px-2 py-0.5 rounded border border-amber-500/40 hidden sm:inline-block">
+                DRIVE BOOST ACTIVE (+45 KM/H)
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => toggleDriveBoost(45)}
+              className={`px-2.5 py-1 rounded text-xs font-mono font-semibold transition-all ${
+                isDriveBoostActive
+                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+                  : 'bg-emerald-900/60 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60'
+              }`}
+            >
+              {isDriveBoostActive ? 'Stop Boost' : 'Simulate Drive (+45 km/h)'}
+            </button>
+            <button
+              onClick={() => setIsTransmitterDrawerOpen(true)}
+              className="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-800 text-emerald-400 border border-emerald-500/40 text-xs font-mono font-medium"
+            >
+              Configure Sensor
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Prominent High-Visibility Fallback Header if GPS TAMPERED or OFFLINE */}
-      {!isAis140Active && (
+      {!isAis140Active && !isHardwareGPS && (
         <div className="bg-amber-950/90 border-b border-amber-600/70 px-4 py-2 flex items-center justify-between text-xs text-amber-100 z-10 animate-in fade-in">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
@@ -379,6 +458,7 @@ const CommandCenter: React.FC<CommandCenterProps> = ({
             anprSightings={vehicleANPR}
             showPoliceUnits={interceptAlertSent}
             policeUnits={policeUnitList}
+            isHardwareGPS={isHardwareGPS}
           />
         </section>
 
@@ -404,6 +484,13 @@ const CommandCenter: React.FC<CommandCenterProps> = ({
           positionHistory={positionHistory}
         />
       </footer>
+
+      {/* Slide-Over GPS Hardware Transmitter Drawer */}
+      <GPSTransmitterDrawer
+        isOpen={isTransmitterDrawerOpen}
+        onClose={() => setIsTransmitterDrawerOpen(false)}
+        initialRegNumber={vehicle.registrationNumber}
+      />
     </div>
   );
 };

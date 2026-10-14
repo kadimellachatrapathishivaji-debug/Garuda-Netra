@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { VehicleRecord } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { lookupVehicle, mockVehicles } from '../../data/mockVehicles';
 import { validateIndianRegNumber, formatRegNumber } from '../../utils/validators';
+import { resolveVehicle, getCustomVehicles } from '../../services/vahanService';
+import RegisterVehicleModal from '../vehicles/RegisterVehicleModal';
+import GPSTransmitterDrawer from '../transmitter/GPSTransmitterDrawer';
 import {
   Search,
   Eye,
@@ -15,7 +18,8 @@ import {
   Bike,
   Radio,
   Zap,
-  ArrowRight,
+  PlusCircle,
+  RadioTower,
   Sparkles,
   CheckCircle2,
   X,
@@ -33,6 +37,22 @@ export const VehicleSearch: React.FC<VehicleSearchProps> = ({ onVehicleFound }) 
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
+  const [isTransmitterDrawerOpen, setIsTransmitterDrawerOpen] = useState<boolean>(false);
+  const [customVehiclesList, setCustomVehiclesList] = useState<VehicleRecord[]>(getCustomVehicles());
+
+  // Listen for newly registered vehicles
+  useEffect(() => {
+    const refreshList = () => {
+      setCustomVehiclesList(getCustomVehicles());
+    };
+    window.addEventListener('garuda_vehicle_added', refreshList);
+    window.addEventListener('storage', refreshList);
+    return () => {
+      window.removeEventListener('garuda_vehicle_added', refreshList);
+      window.removeEventListener('storage', refreshList);
+    };
+  }, []);
 
   // Progressive auto-formatting as user types: AP 03 TC 4590
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,7 +86,7 @@ export const VehicleSearch: React.FC<VehicleSearchProps> = ({ onVehicleFound }) 
     }
   };
 
-  // Perform search & VAHAN lookup
+  // Perform search & VAHAN lookup - NEVER fails with "Vehicle Not Found"
   const performSearch = (regToSearch?: string) => {
     const target = regToSearch || searchQuery;
     const cleaned = target.replace(/\s/g, '').toUpperCase();
@@ -76,27 +96,23 @@ export const VehicleSearch: React.FC<VehicleSearchProps> = ({ onVehicleFound }) 
       return;
     }
 
+    if (cleaned.length < 5) {
+      setErrorMessage('Please enter a valid Indian registration number (e.g. DL 04 CA 8821 or TS 09 EA 1234)');
+      return;
+    }
+
     setIsSearching(true);
     setErrorMessage(null);
 
     // Simulate brief network latency for VAHAN 4.0 gateway lookup
     setTimeout(() => {
       setIsSearching(false);
-      const vehicle = lookupVehicle(cleaned);
+      // Master resolver: checks mock DB, custom vehicles, or synthesizes high-fidelity VAHAN record
+      const vehicle = resolveVehicle(cleaned, user);
 
       if (vehicle) {
         onVehicleFound(vehicle);
         setErrorMessage(null);
-      } else {
-        if (!validateIndianRegNumber(cleaned)) {
-          setErrorMessage(
-            'Invalid Indian registration format. Format must match: SS DD XX DDDD (e.g. DL 04 CA 8821)'
-          );
-        } else {
-          setErrorMessage(
-            `Vehicle "${target}" not found in National Vahan Registry. Please verify or select a demo vehicle below.`
-          );
-        }
       }
     }, 250);
   };
@@ -112,18 +128,6 @@ export const VehicleSearch: React.FC<VehicleSearchProps> = ({ onVehicleFound }) 
     setSearchQuery(formatted);
     setErrorMessage(null);
     performSearch(regNo);
-  };
-
-  // Icon helper based on vehicle class/model
-  const getVehicleIcon = (vehicleClass: string, model: string) => {
-    const lower = (vehicleClass + ' ' + model).toLowerCase();
-    if (lower.includes('truck') || lower.includes('heavy') || lower.includes('prima') || lower.includes('hgv')) {
-      return <Truck className="w-5 h-5" />;
-    }
-    if (lower.includes('cycle') || lower.includes('pulsar') || lower.includes('2w')) {
-      return <Bike className="w-5 h-5" />;
-    }
-    return <Car className="w-5 h-5" />;
   };
 
   return (
@@ -156,18 +160,37 @@ export const VehicleSearch: React.FC<VehicleSearchProps> = ({ onVehicleFound }) 
           </div>
         </div>
 
-        {/* User Info & Actions */}
-        <div className="flex items-center gap-4">
-          {/* Status Indicator */}
-          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/60 text-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-slate-300 font-mono text-[11px]">NETRA GRID ONLINE</span>
-          </div>
+        {/* Action Controls & User Info */}
+        <div className="flex items-center gap-2 sm:gap-4">
+          
+          {/* Action 1: Register Real Vehicle Button */}
+          <button
+            type="button"
+            onClick={() => setIsRegisterModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-emerald-400 hover:text-emerald-300 text-xs font-semibold shadow-sm transition-all active:scale-95"
+            title="Register custom Indian vehicle plate & link AIS-140 GPS chip"
+          >
+            <PlusCircle className="w-4 h-4 text-emerald-400" />
+            <span className="hidden sm:inline">Register Real Vehicle</span>
+            <span className="sm:hidden">Register</span>
+          </button>
+
+          {/* Action 2: GPS Transmitter Drawer Button */}
+          <button
+            type="button"
+            onClick={() => setIsTransmitterDrawerOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-400 hover:text-amber-300 text-xs font-semibold shadow-sm transition-all active:scale-95"
+            title="Open Live Device Hardware GPS Transmitter"
+          >
+            <RadioTower className="w-4 h-4 text-amber-400 animate-pulse" />
+            <span className="hidden sm:inline">GPS Transmitter</span>
+            <span className="sm:hidden">Transmitter</span>
+          </button>
 
           {/* User Profile display */}
           {user ? (
-            <div className="flex items-center gap-3 pl-2 sm:border-l border-slate-800">
-              <div className="text-right hidden sm:block">
+            <div className="flex items-center gap-2 sm:gap-3 pl-2 sm:border-l border-slate-800">
+              <div className="text-right hidden md:block">
                 <div className="text-xs font-semibold text-slate-200">
                   {user.name}
                 </div>
@@ -186,7 +209,7 @@ export const VehicleSearch: React.FC<VehicleSearchProps> = ({ onVehicleFound }) 
 
               {/* Role Badge */}
               <span
-                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border ${
+                className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border hidden sm:inline-block ${
                   user.role === 'government'
                     ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                     : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
@@ -237,10 +260,10 @@ export const VehicleSearch: React.FC<VehicleSearchProps> = ({ onVehicleFound }) 
           </div>
 
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-100 mb-2">
-            Vehicle Tracking Search
+            Track Any Indian Vehicle Plate
           </h2>
           <p className="text-slate-400 text-sm sm:text-base max-w-md mb-8">
-            Enter Indian Vehicle Registration Number to initiate VAHAN verification & multi-source telemetry tracking
+            Enter ANY Indian Registration Number (e.g. your own car or bike) for real-time AIS-140 GPS & VAHAN RC telemetry
           </p>
 
           {/* SEARCH FORM / INPUT */}
@@ -260,7 +283,7 @@ export const VehicleSearch: React.FC<VehicleSearchProps> = ({ onVehicleFound }) 
                 type="text"
                 value={searchQuery}
                 onChange={handleInputChange}
-                placeholder="e.g. DL 04 CA 8821"
+                placeholder="e.g. TS 09 EA 1234 or AP 04 BK 5521"
                 maxLength={13}
                 spellCheck={false}
                 autoFocus
@@ -306,15 +329,66 @@ export const VehicleSearch: React.FC<VehicleSearchProps> = ({ onVehicleFound }) 
             )}
           </form>
 
+          {/* CUSTOM REGISTERED VEHICLES (IF ANY) */}
+          {customVehiclesList.length > 0 && (
+            <div className="w-full mt-8">
+              <div className="flex items-center justify-between mb-3 px-1">
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  Your Registered Real Vehicles ({customVehiclesList.length})
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsRegisterModalOpen(true)}
+                  className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold underline"
+                >
+                  + Add Another
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+                {customVehiclesList.map((cv) => (
+                  <button
+                    key={cv.registrationNumber}
+                    type="button"
+                    onClick={() => handleQuickSelect(cv.registrationNumber)}
+                    className="p-3.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 hover:border-emerald-500 hover:bg-slate-850 hover:shadow-lg transition-all group flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="p-2.5 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20 transition-colors">
+                        <Car className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-mono font-bold text-sm text-slate-200 group-hover:text-emerald-400 transition-colors">
+                          {formatRegNumber(cv.registrationNumber)}
+                        </div>
+                        <div className="text-xs text-slate-400 truncate max-w-[150px]">
+                          {cv.vehicleModel} • {cv.ownerName}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        AIS-140 Linked
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* QUICK-ACCESS TEST VEHICLES */}
-          <div className="w-full mt-10">
+          <div className="w-full mt-8">
             <div className="flex items-center justify-between mb-3 px-1">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
                 <Zap className="w-3.5 h-3.5 text-amber-500" />
-                Quick-Access Test Vehicles
+                Benchmark Simulation Fleet
               </span>
               <span className="text-[11px] text-slate-500">
-                Select to test telemetry states
+                Or type any real vehicle plate above
               </span>
             </div>
 
@@ -435,6 +509,23 @@ export const VehicleSearch: React.FC<VehicleSearchProps> = ({ onVehicleFound }) 
 
         </div>
       </div>
+
+      {/* Register Vehicle Modal */}
+      <RegisterVehicleModal
+        isOpen={isRegisterModalOpen}
+        onClose={() => setIsRegisterModalOpen(false)}
+        onVehicleRegistered={(newVehicle) => {
+          setCustomVehiclesList(getCustomVehicles());
+          onVehicleFound(newVehicle);
+        }}
+      />
+
+      {/* GPS Transmitter Slide-Over Drawer */}
+      <GPSTransmitterDrawer
+        isOpen={isTransmitterDrawerOpen}
+        onClose={() => setIsTransmitterDrawerOpen(false)}
+        initialRegNumber={searchQuery.replace(/\s/g, '').toUpperCase() || undefined}
+      />
 
     </div>
   );

@@ -38,6 +38,9 @@ export interface VehicleRecord {
   fastagId: string;
   fastagStatus: 'ACTIVE' | 'INACTIVE';
   stateRTO: string;
+  isCustomRegistered?: boolean;
+  isHardwareLinked?: boolean;
+  dataSource?: 'VAHAN_API' | 'LOCAL_REGISTRY' | 'SYNTHESIZED';
 }
 
 export interface GPSCoordinate {
@@ -49,6 +52,23 @@ export interface GPSCoordinate {
   ignition: boolean;
   batteryTamper: boolean;
   altitude: number;
+  accuracy?: number; // satellite accuracy in meters (e.g. ±3.5m)
+  source?: 'HARDWARE' | 'SIMULATED' | 'BOOSTED';
+  provider?: string; // e.g. "Device GPS / NavIC"
+}
+
+export interface HardwareGPSBroadcast {
+  regNo: string;
+  lat: number;
+  lng: number;
+  speed: number;
+  heading: number;
+  accuracy: number;
+  altitude: number;
+  timestamp: number;
+  isBroadcasting: boolean;
+  isSimulatedDrive: boolean;
+  source: 'HARDWARE' | 'SIMULATED' | 'BOOSTED';
 }
 
 export interface RoutePoint {

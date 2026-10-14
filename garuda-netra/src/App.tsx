@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { TrackingProvider, useTracking } from './context/TrackingContext';
@@ -12,6 +12,7 @@ import VahanVerificationModal from './components/search/VahanVerificationModal';
 import CommandCenter from './components/dashboard/CommandCenter';
 import OwnerApprovalModal from './components/notifications/OwnerApprovalModal';
 import SMSNotificationDrawer from './components/notifications/SMSNotificationDrawer';
+import GPSTransmitterPage from './components/transmitter/GPSTransmitterPage';
 
 function AppContent() {
   const { user, isAuthenticated, loginAsOwner, loginAsGov, logout } = useAuth();
@@ -311,7 +312,10 @@ export default function App() {
   return (
     <AuthProvider>
       <TrackingProvider>
-        <AppContent />
+        <Routes>
+          <Route path="/transmitter" element={<GPSTransmitterPage />} />
+          <Route path="*" element={<AppContent />} />
+        </Routes>
       </TrackingProvider>
     </AuthProvider>
   );

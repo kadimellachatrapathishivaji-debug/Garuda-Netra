@@ -28,6 +28,10 @@ import {
   Camera,
   CreditCard,
   Compass,
+  Crosshair,
+  LocateFixed,
+  RadioTower,
+  Sparkles,
 } from 'lucide-react';
 
 interface PoliceUnitItem {
@@ -48,41 +52,48 @@ export interface LiveMapProps {
   anprSightings: ANPRSighting[];
   showPoliceUnits: boolean;
   policeUnits: PoliceUnitItem[];
+  isHardwareGPS?: boolean;
 }
 
 // Inner helper component to smoothly fly/pan the map
-function MapUpdater({ position }: { position: [number, number] | null }) {
+function MapUpdater({
+  position,
+  isLocked,
+}: {
+  position: [number, number] | null;
+  isLocked: boolean;
+}) {
   const map = useMap();
   useEffect(() => {
-    if (position) {
-      map.flyTo(position, Math.max(map.getZoom(), 13), { duration: 1.2 });
+    if (position && isLocked) {
+      map.flyTo(position, Math.max(map.getZoom(), 14), { duration: 0.8 });
     }
-  }, [position, map]);
+  }, [position, isLocked, map]);
   return null;
 }
 
 // Custom vehicle DivIcon with ping pulse
-const createVehicleIcon = (isMoving: boolean, isTampered: boolean) =>
-  L.divIcon({
+const createVehicleIcon = (
+  isMoving: boolean,
+  isTampered: boolean,
+  isHardware: boolean
+) => {
+  const color = isTampered ? '#ef4444' : isHardware ? '#10b981' : isMoving ? '#f59e0b' : '#64748b';
+  return L.divIcon({
     className: 'custom-vehicle-marker',
     html: `
-      <div style="position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
-        <div style="position:absolute;inset:0;border-radius:50%;background:${
-          isTampered ? '#ef4444' : isMoving ? '#f59e0b' : '#64748b'
-        };opacity:0.4;animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></div>
-        <div style="position:absolute;inset:2px;border-radius:50%;background:${
-          isTampered ? '#ef4444' : isMoving ? '#f59e0b' : '#64748b'
-        };opacity:0.2;"></div>
-        <div style="position:relative;width:14px;height:14px;border-radius:50%;background:${
-          isTampered ? '#ef4444' : isMoving ? '#f59e0b' : '#64748b'
-        };border:2px solid #ffffff;box-shadow:0 0 10px ${
-      isTampered ? '#ef4444' : '#f59e0b'
-    };"></div>
+      <div style="position:relative;width:32px;height:32px;display:flex;align-items:center;justify-content:center;">
+        <div style="position:absolute;inset:0;border-radius:50%;background:${color};opacity:0.45;animation:ping 1.5s cubic-bezier(0,0,0.2,1) infinite;"></div>
+        <div style="position:absolute;inset:2px;border-radius:50%;background:${color};opacity:0.25;"></div>
+        <div style="position:relative;width:16px;height:16px;border-radius:50%;background:${color};border:2px solid #ffffff;box-shadow:0 0 12px ${color};display:flex;align-items:center;justify-content:center;">
+          ${isHardware ? '<div style="width:6px;height:6px;background:#ffffff;border-radius:50%;"></div>' : ''}
+        </div>
       </div>
     `,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
   });
+};
 
 // Custom Police PCR DivIcon
 const createPoliceIcon = () =>
@@ -138,21 +149,22 @@ const LiveMap: React.FC<LiveMapProps> = ({
   anprSightings,
   showPoliceUnits,
   policeUnits,
+  isHardwareGPS = false,
 }) => {
   // Layer visibility state
   const [showRoute, setShowRoute] = useState(true);
   const [showFASTag, setShowFASTag] = useState(true);
   const [showANPR, setShowANPR] = useState(true);
   const [policeVisible, setPoliceVisible] = useState(showPoliceUnits);
+  const [isCameraLocked, setIsCameraLocked] = useState(true);
 
   useEffect(() => {
     setPoliceVisible(showPoliceUnits);
   }, [showPoliceUnits]);
 
   // Determine initial center
-  // Default to India center [20.5937, 78.9629]
   const defaultCenter: [number, number] = [20.5937, 78.9629];
-  const initialZoom = currentPosition ? 13 : 5;
+  const initialZoom = currentPosition ? 14 : 5;
 
   // Active target center
   const activePosition: [number, number] | null = currentPosition
@@ -166,6 +178,7 @@ const LiveMap: React.FC<LiveMapProps> = ({
   const isMoving = Boolean(currentPosition && currentPosition.speed > 0);
   const isTampered =
     vehicle.ais140Status === 'TAMPERED' || Boolean(currentPosition?.batteryTamper);
+  const isHardware = isHardwareGPS || currentPosition?.source === 'HARDWARE';
 
   // Polyline positions array
   const polylinePositions: [number, number][] = positionHistory.map((p) => [
@@ -175,17 +188,37 @@ const LiveMap: React.FC<LiveMapProps> = ({
 
   return (
     <div className="relative w-full h-full min-h-[420px] rounded-lg overflow-hidden border border-slate-800 bg-slate-950 shadow-2xl">
-      {/* HUD Top-Left Overlay: Coordinates & Lock */}
+      {/* HUD Top-Left Overlay: Coordinates, Satellite Status & Camera Lock */}
       <div className="absolute top-3 left-3 z-[1000] flex flex-col gap-1.5 pointer-events-none">
-        <div className="px-3 py-1.5 rounded-md bg-slate-900/90 border border-slate-700/80 backdrop-blur-md shadow-lg flex items-center gap-2">
+        
+        {/* Hardware vs Simulated Signal Badge */}
+        <div
+          className={`px-3 py-1.5 rounded-md border backdrop-blur-md shadow-lg flex items-center gap-2 ${
+            isHardware
+              ? 'bg-emerald-950/90 border-emerald-500/60 text-emerald-300'
+              : 'bg-slate-900/90 border-slate-700/80 text-slate-200'
+          }`}
+        >
           <div className="flex items-center gap-1.5">
-            <Radio className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-            <span className="text-[11px] font-mono font-bold tracking-wider text-slate-200 uppercase">
-              {currentPosition ? 'GPS LOCKED' : 'SEARCHING SATELLITES'}
+            {isHardware ? (
+              <RadioTower className="w-4 h-4 text-emerald-400 animate-pulse" />
+            ) : (
+              <Radio className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+            )}
+            <span className="text-[11px] font-mono font-bold tracking-wider uppercase">
+              {isHardware
+                ? 'LIVE HARDWARE GPS (AIS-140)'
+                : currentPosition
+                ? 'GPS LOCKED'
+                : 'SEARCHING SATELLITES'}
             </span>
           </div>
           <span className="text-slate-600">|</span>
-          <span className="text-[11px] font-mono text-amber-400">
+          <span
+            className={`text-[11px] font-mono ${
+              isHardware ? 'text-emerald-400' : 'text-amber-400'
+            }`}
+          >
             {currentPosition
               ? `${formatCoordinate(currentPosition.lat, 'lat')} • ${formatCoordinate(
                   currentPosition.lng,
@@ -193,6 +226,11 @@ const LiveMap: React.FC<LiveMapProps> = ({
                 )}`
               : 'FALLBACK SENSORS ONLY'}
           </span>
+          {isHardware && currentPosition?.accuracy && (
+            <span className="text-[10px] font-mono bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/40">
+              ±{Math.round(currentPosition.accuracy)}m
+            </span>
+          )}
         </div>
 
         {/* Speed readout banner on map */}
@@ -206,12 +244,37 @@ const LiveMap: React.FC<LiveMapProps> = ({
             <span className={`text-[10px] font-mono font-bold ${getSpeedColor(currentPosition.speed)}`}>
               {currentPosition.speed} KM/H
             </span>
+            {currentPosition.altitude && (
+              <>
+                <span className="text-slate-600">|</span>
+                <span className="text-[10px] font-mono text-slate-400">
+                  ALT: {Math.round(currentPosition.altitude)}m
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>
 
-      {/* HUD Top-Right Overlay: Layer Toggles */}
+      {/* HUD Top-Right Overlay: Camera Lock & Layer Toggles */}
       <div className="absolute top-3 right-3 z-[1000] flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 p-1.5 rounded-lg backdrop-blur-md shadow-xl">
+        
+        {/* Center on Live Vehicle Camera Lock Button */}
+        <button
+          onClick={() => setIsCameraLocked(!isCameraLocked)}
+          title={isCameraLocked ? 'Camera Locked onto Vehicle (Click to unlock)' : 'Camera Unlocked (Click to follow vehicle)'}
+          className={`px-2 py-1 rounded text-[11px] font-mono flex items-center gap-1.5 transition-all ${
+            isCameraLocked
+              ? 'bg-amber-500/25 text-amber-300 border border-amber-500/50 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+          }`}
+        >
+          <LocateFixed className={`w-3.5 h-3.5 ${isCameraLocked ? 'text-amber-400 animate-pulse' : ''}`} />
+          <span>{isCameraLocked ? 'Center: Locked' : 'Center Lock'}</span>
+        </button>
+
+        <span className="h-4 w-px bg-slate-700" />
+
         <button
           onClick={() => setShowRoute(!showRoute)}
           title="Toggle Vehicle Route Trace"
@@ -266,13 +329,21 @@ const LiveMap: React.FC<LiveMapProps> = ({
       </div>
 
       {/* Map Legend Overlay (Bottom-Left) */}
-      <div className="absolute bottom-3 left-3 z-[1000] px-3 py-2 rounded-lg bg-slate-900/90 border border-slate-700/80 backdrop-blur-md shadow-lg pointer-events-none text-[11px] text-slate-300 flex items-center gap-4">
+      <div className="absolute bottom-3 left-3 z-[1000] px-3 py-2 rounded-lg bg-slate-900/90 border border-slate-700/80 backdrop-blur-md shadow-lg pointer-events-none text-[11px] text-slate-300 flex items-center gap-3 sm:gap-4">
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-[0_0_6px_#f59e0b]" />
-          <span>Vehicle</span>
+          <span
+            className={`w-2.5 h-2.5 rounded-full ${
+              isHardware
+                ? 'bg-emerald-400 shadow-[0_0_6px_#10b981]'
+                : 'bg-amber-500 shadow-[0_0_6px_#f59e0b]'
+            }`}
+          />
+          <span>{isHardware ? 'Hardware AIS-140' : 'Vehicle'}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-0.5 bg-amber-500" />
+          <span
+            className={`w-3 h-0.5 ${isHardware ? 'bg-emerald-400' : 'bg-amber-500'}`}
+          />
           <span>Route</span>
         </div>
         <div className="flex items-center gap-1.5">
@@ -306,8 +377,8 @@ const LiveMap: React.FC<LiveMapProps> = ({
           maxZoom={19}
         />
 
-        {/* Map View Fly Updater */}
-        <MapUpdater position={activePosition} />
+        {/* Map View Fly/Center Updater */}
+        <MapUpdater position={activePosition} isLocked={isCameraLocked} />
 
         {/* Route Polyline */}
         {showRoute && polylinePositions.length > 1 && (
@@ -316,7 +387,7 @@ const LiveMap: React.FC<LiveMapProps> = ({
             <Polyline
               positions={polylinePositions}
               pathOptions={{
-                color: '#f59e0b',
+                color: isHardware ? '#10b981' : '#f59e0b',
                 weight: 8,
                 opacity: 0.25,
                 lineCap: 'round',
@@ -327,7 +398,7 @@ const LiveMap: React.FC<LiveMapProps> = ({
             <Polyline
               positions={polylinePositions}
               pathOptions={{
-                color: '#f59e0b',
+                color: isHardware ? '#10b981' : '#f59e0b',
                 weight: 4,
                 opacity: 0.9,
                 lineCap: 'round',
@@ -341,24 +412,36 @@ const LiveMap: React.FC<LiveMapProps> = ({
         {currentPosition && (
           <Marker
             position={[currentPosition.lat, currentPosition.lng]}
-            icon={createVehicleIcon(isMoving, isTampered)}
+            icon={createVehicleIcon(isMoving, isTampered, isHardware)}
           >
             <Popup className="tactical-popup">
-              <div className="p-1 space-y-1.5 text-xs text-slate-100">
+              <div className="p-1 space-y-1.5 text-xs text-slate-100 min-w-[210px]">
                 <div className="flex items-center justify-between border-b border-slate-700 pb-1">
-                  <span className="font-mono font-bold text-amber-400 text-sm">
+                  <span
+                    className={`font-mono font-bold text-sm ${
+                      isHardware ? 'text-emerald-400' : 'text-amber-400'
+                    }`}
+                  >
                     {vehicle.registrationNumber}
                   </span>
                   <span
                     className={`px-1.5 py-0.2 rounded text-[10px] font-mono ${
                       isTampered
                         ? 'bg-red-500/20 text-red-400'
-                        : isMoving
+                        : isHardware
                         ? 'bg-emerald-500/20 text-emerald-400'
+                        : isMoving
+                        ? 'bg-amber-500/20 text-amber-400'
                         : 'bg-slate-700 text-slate-300'
                     }`}
                   >
-                    {isTampered ? 'TAMPERED' : isMoving ? 'MOVING' : 'STOPPED'}
+                    {isTampered
+                      ? 'TAMPERED'
+                      : isHardware
+                      ? 'LIVE SATELLITE'
+                      : isMoving
+                      ? 'MOVING'
+                      : 'STOPPED'}
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-300">
@@ -377,8 +460,14 @@ const LiveMap: React.FC<LiveMapProps> = ({
                   {formatCoordinate(currentPosition.lat, 'lat')},{' '}
                   {formatCoordinate(currentPosition.lng, 'lng')}
                 </div>
-                <div className="text-[10px] text-slate-400 border-t border-slate-800 pt-1">
-                  Last ping: {formatTimestamp(new Date(currentPosition.timestamp))}
+                {currentPosition.accuracy && (
+                  <div className="text-[10px] text-emerald-400 font-mono">
+                    Accuracy: ±{Math.round(currentPosition.accuracy)} meters
+                  </div>
+                )}
+                <div className="text-[10px] text-slate-400 border-t border-slate-800 pt-1 flex justify-between">
+                  <span>Source: {currentPosition.provider || (isHardware ? 'NavIC Hardware' : 'Simulation')}</span>
+                  <span>{formatTimestamp(new Date(currentPosition.timestamp))}</span>
                 </div>
               </div>
             </Popup>
