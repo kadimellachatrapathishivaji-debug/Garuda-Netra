@@ -4,30 +4,41 @@ export const anprSightings: Record<string, ANPRSighting[]> = {
   'AP03TC4590': [
     {
       id: 'ANPR-001',
-      cameraId: 'CAM-AP-NH716-KM12',
-      cameraLocation: 'NH-716 Renigunta Road, Settipalli High-Speed Camera',
-      location: { lat: 13.6390, lng: 79.4820 },
+      cameraId: 'CAM-AP-NH71-KM08',
+      cameraLocation: 'Tirupati Air Bypass Road Junction Camera',
+      location: { lat: 13.626444, lng: 79.430918 },
       timestamp: '2026-10-14T06:05:00+05:30',
       confidenceScore: 97.8,
       capturedImage: '/anpr-placeholder.jpg',
-      direction: 'Eastbound',
+      direction: 'Eastbound towards Bypass',
       city: 'Tirupati, AP',
     },
     {
       id: 'ANPR-002',
-      cameraId: 'CAM-AP-NH48-KM120',
-      cameraLocation: 'NH-48 Golden Quadrilateral, Sullurupeta Bypass Camera',
-      location: { lat: 13.5650, lng: 80.0980 },
-      timestamp: '2026-10-14T07:20:00+05:30',
+      cameraId: 'CAM-AP-NH71-KM18',
+      cameraLocation: 'NH-71 Daminedu Bypass Speed Camera',
+      location: { lat: 13.612158, lng: 79.448393 },
+      timestamp: '2026-10-14T06:22:00+05:30',
       confidenceScore: 95.4,
       capturedImage: '/anpr-placeholder.jpg',
       direction: 'Chennai-bound',
-      city: 'Sullurupeta, AP',
+      city: 'Tirupati Rural, AP',
+    },
+    {
+      id: 'ANPR-003',
+      cameraId: 'CAM-TN-NH48-KM145',
+      cameraLocation: 'NH-48 Chennai Koyambedu Entry Camera',
+      location: { lat: 13.084617, lng: 80.198588 },
+      timestamp: '2026-10-14T09:10:00+05:30',
+      confidenceScore: 98.9,
+      capturedImage: '/anpr-placeholder.jpg',
+      direction: 'Chennai Central',
+      city: 'Chennai, TN',
     },
   ],
   'DL04CA8821': [
     {
-      id: 'ANPR-003',
+      id: 'ANPR-004',
       cameraId: 'CAM-DL-TILAK-01',
       cameraLocation: 'Tilak Marg / Bhairon Marg Highway Camera',
       location: { lat: 28.6140, lng: 77.2390 },
@@ -38,7 +49,7 @@ export const anprSightings: Record<string, ANPRSighting[]> = {
       city: 'New Delhi',
     },
     {
-      id: 'ANPR-004',
+      id: 'ANPR-005',
       cameraId: 'CAM-DL-ASHRAM-03',
       cameraLocation: 'Ashram Chowk Underpass ANPR Camera',
       location: { lat: 28.5710, lng: 77.2625 },
@@ -51,7 +62,7 @@ export const anprSightings: Record<string, ANPRSighting[]> = {
   ],
   'KA01MB1029': [
     {
-      id: 'ANPR-005',
+      id: 'ANPR-006',
       cameraId: 'CAM-KA-EC-MAIN-02',
       cameraLocation: 'Electronic City Toll Sighting Camera',
       location: { lat: 12.8399, lng: 77.6770 },
@@ -64,7 +75,7 @@ export const anprSightings: Record<string, ANPRSighting[]> = {
   ],
   'MH02FZ3311': [
     {
-      id: 'ANPR-006',
+      id: 'ANPR-007',
       cameraId: 'CAM-MH-BANDRA-01',
       cameraLocation: 'Bandra-Worli Sea Link Toll Approach',
       location: { lat: 19.0430, lng: 72.8200 },

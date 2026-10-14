@@ -4,9 +4,9 @@ export const fastagScans: Record<string, FASTagScan[]> = {
   'AP03TC4590': [
     {
       id: 'FT-001',
-      tollPlazaName: 'Renigunta Toll Plaza',
-      location: { lat: 13.6420, lng: 79.5220 },
-      highway: 'NH-716 (Tirupati-Renigunta Highway)',
+      tollPlazaName: 'Tirupati Bypass Toll Plaza',
+      location: { lat: 13.61634, lng: 79.478162 },
+      highway: 'NH-71 (Tirupati-Renigunta Bypass)',
       timestamp: '2026-10-14T06:15:00+05:30',
       laneNumber: 3,
       transactionId: 'TXN-NHAI-20261014-001',
@@ -15,9 +15,9 @@ export const fastagScans: Record<string, FASTagScan[]> = {
     },
     {
       id: 'FT-002',
-      tollPlazaName: 'Tada Toll Plaza',
-      location: { lat: 13.5050, lng: 80.1160 },
-      highway: 'NH-48 (Golden Quadrilateral Highway)',
+      tollPlazaName: 'Puthalapattu-Tada Toll Plaza',
+      location: { lat: 13.336684, lng: 79.899442 },
+      highway: 'NH-71 / NH-48 Inter-State Highway',
       timestamp: '2026-10-14T07:45:00+05:30',
       laneNumber: 2,
       transactionId: 'TXN-NHAI-20261014-002',
@@ -26,9 +26,9 @@ export const fastagScans: Record<string, FASTagScan[]> = {
     },
     {
       id: 'FT-003',
-      tollPlazaName: 'Elavur Toll Plaza',
-      location: { lat: 13.4200, lng: 80.1390 },
-      highway: 'NH-48 (Golden Quadrilateral Highway)',
+      tollPlazaName: 'Chennai North Toll Plaza',
+      location: { lat: 13.116077, lng: 80.197738 },
+      highway: 'NH-48 Chennai Outer Ring Road Approach',
       timestamp: '2026-10-14T08:30:00+05:30',
       laneNumber: 1,
       transactionId: 'TXN-NHAI-20261014-003',
